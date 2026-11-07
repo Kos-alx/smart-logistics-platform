@@ -1,0 +1,27 @@
+[project]
+name = "smart-logistics-platform"
+version = "0.1.0"
+description = "Smart Logistics Data & ML Platform"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "catboost>=1.2,<2",
+    "clickhouse-connect>=0.8,<1",
+    "numpy>=1.26,<3",
+    "pandas>=2.2,<3",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic-settings>=2.7,<3",
+    "scikit-learn>=1.6,<2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.9,<1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
