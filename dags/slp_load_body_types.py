@@ -11,6 +11,7 @@ from airflow.sdk import dag, task
     catchup=False,
     max_active_runs=1,
     tags=["slp", "etl", "reference"],
+    is_paused_upon_creation=False,
 )
 def load_body_types_dag():
 

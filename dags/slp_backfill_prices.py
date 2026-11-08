@@ -12,6 +12,7 @@ from slp.etl.prices import run_prices_etl
     catchup=False,
     max_active_runs=1,
     tags=["slp", "etl", "prices", "backfill"],
+    is_paused_upon_creation=False,
 )
 def backfill_prices():
 
