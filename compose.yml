@@ -63,6 +63,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./sql/source:/opt/slp/sql/source:ro
+      - ./sql/core:/opt/slp/sql/core:ro
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
