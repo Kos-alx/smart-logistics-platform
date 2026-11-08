@@ -76,8 +76,8 @@ CORE_COLUMNS = (
 EXTRACT_PRICES_SQL = sql.SQL("""
     SELECT {columns}
     FROM public.prices
-    WHERE COALESCE(updated_at, created_at) >= %s
-      AND COALESCE(updated_at, created_at) < %s
+    WHERE updated_at >= %s
+      AND updated_at < %s
     ORDER BY id
 """).format(
     columns=sql.SQL(", ").join(
@@ -147,33 +147,24 @@ def normalize_interval(
     start_date: datetime,
     end_date: datetime,
 ) -> tuple[datetime, datetime]:
-    """Convert Airflow boundaries to naive UTC for source timestamps.
-
-    Assumption: source TIMESTAMP values represent UTC.
-    """
+    """Convert Airflow boundaries to naive UTC timestamps."""
 
     if not isinstance(start_date, datetime):
         raise TypeError("start_date must be datetime")
-
     if not isinstance(end_date, datetime):
         raise TypeError("end_date must be datetime")
 
     def to_naive_utc(value: datetime) -> datetime:
         if value.tzinfo is None:
-            return value
+            raise ValueError("Airflow interval must be timezone-aware")
 
-        return (
-            value.astimezone(timezone.utc)
-            .replace(tzinfo=None)
-        )
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
 
     start = to_naive_utc(start_date)
     end = to_naive_utc(end_date)
 
     if start >= end:
-        raise ValueError(
-            "start_date must be earlier than end_date"
-        )
+        raise ValueError("start_date must be earlier than end_date")
 
     return start, end
 

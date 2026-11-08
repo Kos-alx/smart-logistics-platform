@@ -36,16 +36,26 @@ SELECT format(
 ) \gexec
 SQL
 
-# Grant application access to source data
-# and permission to create its own schemas
+
+# Grant full application access to deals_bigdata
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
   -v source_db="$POSTGRES_DB" \
   -v slp_user="$SLP_DB_USER" <<'SQL'
-GRANT CONNECT, CREATE ON DATABASE :"source_db" TO :"slp_user";
 
-GRANT USAGE ON SCHEMA public TO :"slp_user";
+ALTER DATABASE :"source_db" OWNER TO :"slp_user";
+
+GRANT ALL PRIVILEGES ON DATABASE :"source_db" TO :"slp_user";
+
+GRANT ALL PRIVILEGES ON SCHEMA public TO :"slp_user";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+GRANT ALL PRIVILEGES ON TABLES TO :"slp_user";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+GRANT ALL PRIVILEGES ON SEQUENCES TO :"slp_user";
+
 SQL
 
 echo "=== PostgreSQL bootstrap complete ==="

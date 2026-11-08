@@ -1,15 +1,13 @@
-
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from airflow.sdk import dag, task, get_current_context
 
 from slp.etl.prices import run_prices_etl
 
-
 @dag(
     dag_id="slp_load_prices",
     schedule="@daily",
-    start_date=datetime(2023, 9, 22),
+    start_date=datetime(2023, 9, 22, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
     tags=["slp", "etl", "prices"],
@@ -23,12 +21,16 @@ def load_prices():
     def extract_transform_load():
         context = get_current_context()
 
-        interval_start = context["data_interval_start"]
-        interval_end = context["data_interval_end"]
+        start = context["data_interval_start"]
+        end = context["data_interval_end"]
+
+        if start == end:
+            start = context["logical_date"]
+            end = start + timedelta(days=1)
 
         return run_prices_etl(
-            start_date=interval_start,
-            end_date=interval_end,
+            start_date=start,
+            end_date=end,
         )
 
     extract_transform_load()
