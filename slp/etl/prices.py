@@ -76,14 +76,15 @@ CORE_COLUMNS = (
 EXTRACT_PRICES_SQL = sql.SQL("""
     SELECT {columns}
     FROM public.prices
-    WHERE updated_at >= %s
-      AND updated_at < %s
+    WHERE COALESCE(updated_at, created_at) >= %s
+        AND COALESCE(updated_at, created_at) < %s
     ORDER BY id
 """).format(
     columns=sql.SQL(", ").join(
         map(sql.Identifier, RAW_COLUMNS)
     )
 )
+
 
 
 INSERT_PRICES_SQL = sql.SQL("""
@@ -99,6 +100,8 @@ INSERT_PRICES_SQL = sql.SQL("""
             core.prices.updated_at,
             core.prices.created_at
         )
+        AND ROW({current_fields})
+            IS DISTINCT FROM ROW({incoming_fields})
 """).format(
     columns=sql.SQL(", ").join(
         map(sql.Identifier, CORE_COLUMNS)
@@ -116,7 +119,22 @@ INSERT_PRICES_SQL = sql.SQL("""
         for column in CORE_COLUMNS
         if column != "id"
     ),
+    current_fields=sql.SQL(", ").join(
+        sql.SQL("core.prices.{column}").format(
+            column=sql.Identifier(column)
+        )
+        for column in CORE_COLUMNS
+        if column not in ("id", "processed_at")
+    ),
+    incoming_fields=sql.SQL(", ").join(
+        sql.SQL("EXCLUDED.{column}").format(
+            column=sql.Identifier(column)
+        )
+        for column in CORE_COLUMNS
+        if column not in ("id", "processed_at")
+    ),
 )
+
 
 
 UPSERT_ISSUE_SQL = """
