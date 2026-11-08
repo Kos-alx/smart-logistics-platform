@@ -11,6 +11,7 @@ echo "=== SLP PostgreSQL bootstrap ==="
 : "${AIRFLOW_DB_USER:?}"
 : "${AIRFLOW_DB_PASSWORD:?}"
 
+# Create application roles
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname postgres \
@@ -22,6 +23,7 @@ CREATE ROLE :"slp_user" LOGIN PASSWORD :'slp_password';
 CREATE ROLE :"airflow_user" LOGIN PASSWORD :'airflow_password';
 SQL
 
+# Create Airflow database
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname postgres \
@@ -34,22 +36,16 @@ SELECT format(
 ) \gexec
 SQL
 
+# Grant application access to source data
+# and permission to create its own schemas
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
   -v source_db="$POSTGRES_DB" \
   -v slp_user="$SLP_DB_USER" <<'SQL'
-CREATE SCHEMA raw;
-CREATE SCHEMA core;
-CREATE SCHEMA mart;
-CREATE SCHEMA ops;
+GRANT CONNECT, CREATE ON DATABASE :"source_db" TO :"slp_user";
 
-GRANT CONNECT ON DATABASE :"source_db" TO :"slp_user";
 GRANT USAGE ON SCHEMA public TO :"slp_user";
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"slp_user";
-
-GRANT USAGE, CREATE ON SCHEMA raw, core, mart, ops TO :"slp_user";
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA raw, core, mart, ops TO :"slp_user";
 SQL
 
 echo "=== PostgreSQL bootstrap complete ==="

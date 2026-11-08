@@ -1,3 +1,42 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: docker/airflow/Dockerfile
+
+  user: "${AIRFLOW_UID:-50000}:0"
+
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB}
+
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?}
+
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+
+    PYTHONPATH: /opt/airflow
+
+    SLP_RAW_DB_HOST: postgres
+    SLP_CORE_DB_HOST: postgres
+    SLP_DB_PORT: "5432"
+    SLP_DB_NAME: ${POSTGRES_DB}
+    SLP_DB_USER: ${SLP_DB_USER}
+    SLP_DB_PASSWORD: ${SLP_DB_PASSWORD}
+
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./slp:/opt/airflow/slp:ro
+
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
   postgres:
     image: postgres:17.6
@@ -31,6 +70,43 @@ services:
       timeout: 5s
       retries: 20
       start_period: 120s
+
+  airflow-init:
+    <<: *airflow-common
+    restart: "no"
+    command: db migrate
+
+  airflow-api-server:
+    <<: *airflow-common
+    restart: unless-stopped
+    command: api-server
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    restart: unless-stopped
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    restart: unless-stopped
+    command: dag-processor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
