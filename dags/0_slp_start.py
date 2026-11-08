@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 
 from airflow.sdk import dag
@@ -50,7 +49,25 @@ def slp_start():
         deferrable=False,
     )
 
+    price_dates = TriggerDagRunOperator(
+        task_id="load_price_dates",
+        trigger_dag_id="slp_load_price_dates",
+        wait_for_completion=True,
+        poke_interval=10,
+        deferrable=False,
+    )
+
+    price_body_types = TriggerDagRunOperator(
+        task_id="load_price_body_types",
+        trigger_dag_id="slp_load_price_body_types",
+        wait_for_completion=True,
+        poke_interval=10,
+        deferrable=False,
+    )
+
+
     [cities, body_types, exchange_rates] >> backfill
+    backfill >> [price_dates, price_body_types]
 
 
 slp_start()
