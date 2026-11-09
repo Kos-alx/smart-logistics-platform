@@ -74,6 +74,33 @@ services:
       retries: 20
       start_period: 120s
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    restart: unless-stopped
+
+    environment:
+      CLICKHOUSE_DB: slp
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:?}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "clickhouse-client --user \"$${CLICKHOUSE_USER}\" --password \"$${CLICKHOUSE_PASSWORD}\" --query 'SELECT 1'"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   airflow-init:
     <<: *airflow-common
     restart: "no"
@@ -113,3 +140,5 @@ services:
 
 volumes:
   postgres_data:
+  clickhouse_data:
+  clickhouse_logs:
