@@ -43,7 +43,11 @@ def slp_start():
 
     backfill = TriggerDagRunOperator(
         task_id="backfill_prices",
-        trigger_dag_id="slp_backfill_prices",
+        trigger_dag_id="slp_load_prices",
+        conf={
+            "start_date": "2023-09-22T00:00:00+00:00",
+            "end_date": "2026-10-27T00:00:00+00:00",
+        },
         wait_for_completion=True,
         poke_interval=10,
         deferrable=False,

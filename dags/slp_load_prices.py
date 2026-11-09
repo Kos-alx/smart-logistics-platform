@@ -20,13 +20,23 @@ def load_prices():
     )
     def extract_transform_load():
         context = get_current_context()
+        conf = context["dag_run"].conf or {}
 
-        start = context["data_interval_start"]
-        end = context["data_interval_end"]
+        if "start_date" in conf and "end_date" in conf:
+            start = datetime.fromisoformat(conf["start_date"])
+            end = datetime.fromisoformat(conf["end_date"])
 
-        if start == end:
-            start = context["logical_date"]
-            end = start + timedelta(days=1)
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=timezone.utc)
+        else:
+            start = context["data_interval_start"]
+            end = context["data_interval_end"]
+
+            if start == end:
+                start = context["logical_date"]
+                end = start + timedelta(days=1)
 
         return run_prices_etl(
             start_date=start,
