@@ -70,8 +70,26 @@ def slp_start():
     )
 
 
+    prices_prepared = TriggerDagRunOperator(
+        task_id="load_prices_prepared",
+        trigger_dag_id="slp_load_prices_prepared",
+        wait_for_completion=True,
+        poke_interval=10,
+        deferrable=False,
+    )
+
+    clickhouse = TriggerDagRunOperator(
+        task_id="sync_prices_prepared_ch",
+        trigger_dag_id="slp_sync_prices_prepared_ch",
+        wait_for_completion=True,
+        poke_interval=10,
+        deferrable=False,
+    )
+
     [cities, body_types, exchange_rates] >> backfill
     backfill >> [price_dates, price_body_types]
+    [price_dates, price_body_types] >> prices_prepared
+    prices_prepared >> clickhouse
 
 
 slp_start()

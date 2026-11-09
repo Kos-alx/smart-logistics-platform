@@ -26,15 +26,24 @@ x-airflow-common: &airflow-common
     SLP_DB_NAME: ${POSTGRES_DB}
     SLP_DB_USER: ${SLP_DB_USER}
     SLP_DB_PASSWORD: ${SLP_DB_PASSWORD}
+    SLP_CH_HOST: clickhouse
+    SLP_CH_PORT: "8123"
+    CLICKHOUSE_DB: ${CLICKHOUSE_DB:-slp}
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER:?}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
 
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./slp:/opt/airflow/slp:ro
+    - ./sql/queries:/opt/airflow/sql/queries:ro
+    - ./sql/clickhouse:/opt/airflow/sql/clickhouse:ro
 
   depends_on:
     postgres:
+      condition: service_healthy
+    clickhouse:
       condition: service_healthy
 
 services:
@@ -80,7 +89,7 @@ services:
     restart: unless-stopped
 
     environment:
-      CLICKHOUSE_DB: slp
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-slp}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:?}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
@@ -92,6 +101,8 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
+      - ./docker/clickhouse/init:/docker-entrypoint-initdb.d:ro
+      - ./sql/clickhouse:/opt/slp/sql/clickhouse:ro
 
     healthcheck:
       test:

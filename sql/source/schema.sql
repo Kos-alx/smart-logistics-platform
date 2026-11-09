@@ -29,7 +29,7 @@ CREATE TABLE body_types (
     std_id       integer
 );
 
--- 2023_02_09_043115 + 2023_10_19_113242 + 2024_07_01_123949 (value -> double precision)
+-- 2023_02_09_043115 + 2023_10_19_113242 + 2024_07_01_123949 (тип value изменён на double precision)
 CREATE TABLE exchange_rates (
     id           bigserial PRIMARY KEY,
     num_code     varchar(255)     NOT NULL,
@@ -56,8 +56,8 @@ CREATE TABLE price_group_stats (
     avg_price           double precision
 );
 
--- 2023_09_21_055520_create_prices_table и последующие alter:
--- meta_item_id, end_loading_date, nearest_rate_date::date, drop deleted_at/*_city_full/body_types,
+-- 2023_09_21_055520_create_prices_table и последующие изменения:
+-- meta_item_id, end_loading_date, nearest_rate_date::date, удаление deleted_at/*_city_full/body_types,
 -- source, external_item_uuid, outlier_mark, weight/volume_category, price_group_id
 CREATE TABLE prices (
     id                  bigserial PRIMARY KEY,

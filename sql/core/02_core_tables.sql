@@ -1,13 +1,13 @@
 
 CREATE TABLE IF NOT EXISTS core.prices (
-    -- Source identifiers and metadata
+    -- Идентификаторы и метаданные источника
     id                  BIGINT PRIMARY KEY,
     created_at          TIMESTAMP(0),
     updated_at          TIMESTAMP(0),
     subscriber_id       INTEGER,
     organization_id     INTEGER,
 
-    -- Route and cargo
+    -- Маршрут и груз
     loading_date        DATE NOT NULL,
     loading_city_gcid   INTEGER NOT NULL,
     unloading_city_gcid INTEGER NOT NULL,
@@ -16,16 +16,16 @@ CREATE TABLE IF NOT EXISTS core.prices (
     total_volume        DOUBLE PRECISION NOT NULL,
     body_type           INTEGER,
 
-    -- Original price
+    -- Исходная цена
     price               DOUBLE PRECISION NOT NULL,
     currency_code       VARCHAR(3) NOT NULL,
     nearest_rate_date   DATE,
 
-    -- Normalized price
+    -- Нормализованная цена
     exchange_rate       NUMERIC(18, 8) NOT NULL,
     price_rub           NUMERIC(18, 2) NOT NULL,
 
-    -- Business attributes
+    -- Бизнес-атрибуты
     complex             BOOLEAN NOT NULL,
     price_type          SMALLINT NOT NULL,
     item_id             INTEGER,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS core.prices (
     volume_category     VARCHAR(4),
     price_group_id      BIGINT,
 
-    -- ETL metadata
+    -- Метаданные ETL
     processed_at        TIMESTAMPTZ NOT NULL
                         DEFAULT CURRENT_TIMESTAMP,
 

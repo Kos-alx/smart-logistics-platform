@@ -1,8 +1,17 @@
 sandbox/
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 *.pyc
 logs/
 artifacts/
+/.codex/
+/.agents/
+/.aws/
+/AGENTS.md
+/slp.code-workspace
+/docs/

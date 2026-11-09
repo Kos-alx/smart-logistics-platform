@@ -9,6 +9,7 @@ CREATE SCHEMA IF NOT EXISTS mart;
 CREATE TABLE IF NOT EXISTS mart.prices_prepared (
     price_id             BIGINT NOT NULL,
     month                DATE NOT NULL,
+    -- Первая дата цены внутри месяца для отбора истории на дату среза.
     first_price_date     DATE NOT NULL,
 
     loading_date         DATE NOT NULL,
@@ -53,9 +54,7 @@ CREATE TABLE IF NOT EXISTS mart.prices_prepared (
         CHECK (distance > 0),
 
     CONSTRAINT prices_prepared_first_date_month
-        CHECK (
-            DATE_TRUNC('month', first_price_date)::date = month
-        )
+        CHECK (DATE_TRUNC('month', first_price_date)::date = month)
 );
 
 -- Индекс для построения карточки маршрута.
@@ -68,6 +67,6 @@ ON mart.prices_prepared (
     weight_category
 );
 
--- Индекс для поиска данных по дате наблюдения.
+-- Индекс для отбора наблюдений на дату среза.
 CREATE INDEX IF NOT EXISTS idx_prices_prepared_first_price_date
 ON mart.prices_prepared (first_price_date);

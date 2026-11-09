@@ -1,4 +1,4 @@
-"""Integration tests for conditional UPSERT in core.prices."""
+"""Интеграционные тесты условного UPSERT в core.prices."""
 
 import os
 from datetime import timedelta
@@ -50,7 +50,7 @@ def get_price(conn, price_id):
 
 
 def test_conditional_upsert(conn):
-    # Use an existing valid record as a fixture.
+    # Используем существующую валидную запись как фикстуру.
     original = conn.execute("""
         SELECT *
         FROM core.prices
@@ -66,7 +66,7 @@ def test_conditional_upsert(conn):
     price_id = original["id"]
     initial_processed_at = original["processed_at"]
 
-    # 1. Identical record: UPDATE must be skipped.
+    # 1. Неизменённая запись: UPDATE должен быть пропущен.
     upsert(conn, original)
 
     unchanged = get_price(conn, price_id)
@@ -74,7 +74,7 @@ def test_conditional_upsert(conn):
     assert unchanged["price"] == original["price"]
     assert unchanged["processed_at"] == initial_processed_at
 
-    # 2. Newer changed record: UPDATE must happen.
+    # 2. Более новая изменённая запись: UPDATE должен выполниться.
     changed = dict(original)
     changed["price"] = original["price"] + 1000.0
     changed["price_rub"] = original["price_rub"] + Decimal("1000")
@@ -91,14 +91,14 @@ def test_conditional_upsert(conn):
     assert updated["updated_at"] == changed["updated_at"]
     assert updated["processed_at"] > initial_processed_at
 
-    # 3. Repeat changed record: UPDATE must be skipped.
+    # 3. Повтор изменённой записи: UPDATE должен быть пропущен.
     upsert(conn, changed)
 
     repeated = get_price(conn, price_id)
 
     assert repeated["processed_at"] == updated["processed_at"]
 
-    # 4. Older record: must not overwrite newer data.
+    # 4. Старая запись не должна перезаписывать более новые данные.
     upsert(conn, original)
 
     final = get_price(conn, price_id)

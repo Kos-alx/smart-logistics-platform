@@ -8,5 +8,7 @@ RUN pip install --no-cache-dir \
     -r /tmp/requirements.txt
 
 COPY --chown=airflow:0 slp /opt/airflow/slp
+COPY --chown=airflow:0 sql/queries /opt/airflow/sql/queries
+COPY --chown=airflow:0 sql/clickhouse /opt/airflow/sql/clickhouse
 
 ENV PYTHONPATH=/opt/airflow
