@@ -64,6 +64,7 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./sql/source:/opt/slp/sql/source:ro
       - ./sql/core:/opt/slp/sql/core:ro
+      - ./sql/mart:/opt/slp/sql/mart:ro
 
     healthcheck:
       test:

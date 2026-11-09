@@ -1,16 +1,16 @@
+"""Инкрементальный ETL: public.prices -> core.prices и dq.quarantine_prices.
 
-"""Incremental ETL: public.prices -> core.prices + dq.quarantine_prices.
+Обрабатывает записи, изменённые в интервале [start_date, end_date).
 
-Processes records changed within [start_date, end_date).
+В источнике используются временные метки TIMESTAMP WITHOUT TIME ZONE.
+Границы Airflow приводятся к UTC без часового пояса.
 
-The source timestamps are PostgreSQL TIMESTAMP WITHOUT TIME ZONE.
-Airflow interval boundaries are normalized to naive UTC timestamps.
-
-Each batch is committed atomically:
-- resolve obsolete DQ reasons;
-- insert or reopen current DQ reasons;
-- remove currently invalid records from Core;
-- upsert valid records into Core.
+Каждый пакет сохраняется атомарно:
+- закрываются неактуальные причины карантина;
+- добавляются или открываются актуальные причины карантина;
+- удаляются невалидные записи Core;
+- вставляются или обновляются валидные записи Core;
+- регистрируются фактические изменения Core для Mart.
 """
 
 import logging
@@ -157,15 +157,23 @@ UPSERT_ISSUE_SQL = """
 """
 
 
+# Регистрация фактически изменённых цен для обновления Mart.
+REGISTER_PRICE_CHANGES_SQL = """
+    INSERT INTO meta_data.changed_prices (price_id, source_table)
+    SELECT DISTINCT price_id, 'prices'
+    FROM unnest(%s::bigint[]) AS changed(price_id)
+"""
+
+
 # ---------------------------------------------------------------------
-# Helpers
+# Вспомогательные функции
 # ---------------------------------------------------------------------
 
 def normalize_interval(
     start_date: datetime,
     end_date: datetime,
 ) -> tuple[datetime, datetime]:
-    """Convert Airflow boundaries to naive UTC timestamps."""
+    """Привести границы Airflow к UTC без часового пояса."""
 
     if not isinstance(start_date, datetime):
         raise TypeError("start_date must be datetime")
@@ -188,7 +196,7 @@ def normalize_interval(
 
 
 def is_finite(value) -> bool:
-    """Check that a numeric value is finite."""
+    """Проверить, что число конечно."""
 
     if value is None:
         return False
@@ -200,7 +208,7 @@ def is_finite(value) -> bool:
 
 
 def calculate_weight_category(weight: float) -> str:
-    """Derive weight category after rounding to 0.1 tonne."""
+    """Определить категорию веса после округления до 0,1 тонны."""
 
     rounded = Decimal(str(weight)).quantize(
         Decimal("0.1"),
@@ -226,13 +234,13 @@ def calculate_weight_category(weight: float) -> str:
 
 
 def calculate_volume_category(volume: float) -> str:
-    """Derive volume category."""
+    """Определить категорию объёма."""
 
     return "FTL" if 0 < volume <= 120 else "OTH"
 
 
 def source_timestamp(row: dict) -> datetime:
-    """Get effective change timestamp for a source record."""
+    """Получить дату изменения записи источника."""
 
     timestamp = row["updated_at"]
 
@@ -248,11 +256,11 @@ def source_timestamp(row: dict) -> datetime:
 
 
 # ---------------------------------------------------------------------
-# Reference data
+# Справочники
 # ---------------------------------------------------------------------
 
 def load_references(conn):
-    """Load reference data into memory for fast DQ checks."""
+    """Загрузить справочники в память для проверок качества."""
 
     with conn.cursor() as cur:
         cur.execute("""
@@ -290,7 +298,7 @@ def load_references(conn):
 
 
 # ---------------------------------------------------------------------
-# Transform + Data Quality
+# Преобразование и проверка качества
 # ---------------------------------------------------------------------
 
 def transform_price(
@@ -298,11 +306,11 @@ def transform_price(
     cities: set,
     rates: dict,
 ) -> tuple[dict | None, list[str]]:
-    """Validate and enrich one source price.
+    """Проверить и обогатить запись цены.
 
-    Returns:
-        (clean_record, []) for valid records.
-        (None, reasons) for invalid records.
+    Возвращает:
+        (clean_record, []) для валидной записи.
+        (None, reasons) для невалидной записи.
     """
 
     reasons = []
@@ -314,33 +322,33 @@ def transform_price(
     weight = row["total_weight"]
     volume = row["total_volume"]
 
-    # Price validation.
+    # Проверка цены.
     if not is_finite(price) or price <= 0:
         reasons.append("INVALID_PRICE")
 
     elif currency == "643" and price <= 1000:
         reasons.append("LOW_RUB_PRICE")
 
-    # Distance validation.
+    # Проверка расстояния.
     if not is_finite(distance) or distance <= 0:
         reasons.append("INVALID_DISTANCE")
 
-    # Weight validation.
+    # Проверка веса.
     if not is_finite(weight) or weight < 0:
         reasons.append("NEGATIVE_WEIGHT")
 
-    # Volume validation.
+    # Проверка объёма.
     if not is_finite(volume) or volume < 0:
         reasons.append("NEGATIVE_VOLUME")
 
-    # City references.
+    # Проверка городов по справочнику.
     if row["loading_city_gcid"] not in cities:
         reasons.append("MISSING_LOADING_CITY")
 
     if row["unloading_city_gcid"] not in cities:
         reasons.append("MISSING_UNLOADING_CITY")
 
-    # Exchange rate.
+    # Валютный курс.
     rate = None
 
     if currency not in SUPPORTED_CURRENCIES:
@@ -365,7 +373,7 @@ def transform_price(
 
     clean = dict(row)
 
-    # Fill only missing categories.
+    # Заполняем только отсутствующие категории.
     if clean["weight_category"] is None:
         clean["weight_category"] = (
             calculate_weight_category(weight)
@@ -386,7 +394,7 @@ def transform_price(
 
 
 # ---------------------------------------------------------------------
-# Batch load
+# Пакетная загрузка
 # ---------------------------------------------------------------------
 
 def process_batch(
@@ -395,7 +403,7 @@ def process_batch(
     cities: set,
     rates: dict,
 ) -> dict:
-    """Process one batch in the caller's transaction."""
+    """Обработать пакет в транзакции вызывающего кода."""
 
     valid = []
     invalid_ids = []
@@ -403,7 +411,7 @@ def process_batch(
     current_issues = set()
     reasons_count = Counter()
 
-    # 1. Transform records.
+    # 1. Проверяем и преобразуем записи.
     for row in batch:
         clean, reasons = transform_price(
             row,
@@ -433,9 +441,11 @@ def process_batch(
         for row in batch
     }
 
+    changed_ids = set()
+
     with conn.cursor() as cur:
 
-        # 2. Load existing active DQ reasons.
+        # 2. Загружаем активные причины карантина.
         cur.execute("""
             SELECT price_id, reason_code
             FROM dq.quarantine_prices
@@ -445,7 +455,7 @@ def process_batch(
 
         previous_issues = set(cur.fetchall())
 
-        # 3. Resolve reasons no longer present.
+        # 3. Закрываем неактуальные причины.
         resolved_issues = (
             previous_issues - current_issues
         )
@@ -461,7 +471,7 @@ def process_batch(
                   AND is_resolved = FALSE
             """, list(resolved_issues))
 
-        # 4. Insert or reopen current issues.
+        # 4. Добавляем или открываем актуальные причины.
         if current_issues:
             cur.executemany(
                 UPSERT_ISSUE_SQL,
@@ -475,14 +485,18 @@ def process_batch(
                 ],
             )
 
-        # 5. Remove invalid records from Core.
+        # 5. Удаляем невалидные записи из Core.
+        # В журнал попадают только действительно удалённые строки.
         if invalid_ids:
             cur.execute("""
                 DELETE FROM core.prices
                 WHERE id = ANY(%s)
+                RETURNING id
             """, (invalid_ids,))
+            changed_ids.update(row[0] for row in cur.fetchall())
 
-        # 6. Upsert valid records.
+        # 6. Вставляем или обновляем валидные записи.
+        # Пакетный UPSERT с RETURNING сохраняет производительность.
         if valid:
             values = [
                 tuple(
@@ -494,8 +508,25 @@ def process_batch(
             ]
 
             cur.executemany(
-                INSERT_PRICES_SQL,
+                INSERT_PRICES_SQL + sql.SQL(" RETURNING id"),
                 values,
+                returning=True,
+            )
+
+            # У каждой операции отдельный набор результатов.
+            # При отсутствии изменений RETURNING возвращает пустой набор.
+            for index in range(len(values)):
+                changed_ids.update(row[0] for row in cur.fetchall())
+                if index < len(values) - 1 and not cur.nextset():
+                    raise RuntimeError(
+                        "Отсутствует результат пакетного UPSERT"
+                    )
+
+        # 7. Записываем изменения в той же транзакции, что и Core.
+        if changed_ids:
+            cur.execute(
+                REGISTER_PRICE_CHANGES_SQL,
+                (sorted(changed_ids),),
             )
 
     return {
@@ -503,19 +534,20 @@ def process_batch(
         "valid": len(valid),
         "invalid": len(invalid_ids),
         "resolved": len(resolved_issues),
+        "changed": len(changed_ids),
         "reasons": reasons_count,
     }
 
 
 # ---------------------------------------------------------------------
-# ETL entry point
+# Точка входа ETL
 # ---------------------------------------------------------------------
 
 def run_prices_etl(
     start_date: datetime,
     end_date: datetime,
 ) -> dict:
-    """Process source records changed in [start_date, end_date)."""
+    """Обработать изменения источника за [start_date, end_date)."""
 
     start, end = normalize_interval(
         start_date,
@@ -534,12 +566,12 @@ def run_prices_etl(
     with get_connection("SLP_RAW_DB_HOST") as raw_conn:
         with get_connection("SLP_CORE_DB_HOST") as core_conn:
 
-            # Reference dictionaries.
+            # Справочники для проверок качества.
             cities, rates = load_references(core_conn)
 
             core_conn.commit()
 
-            # Server-side cursor: avoid loading all rows into memory.
+            # Серверный курсор: не загружаем все строки в память.
             with raw_conn.cursor(
                 name="prices_stream",
                 row_factory=dict_row,
@@ -579,6 +611,7 @@ def run_prices_etl(
                             "valid",
                             "invalid",
                             "resolved",
+                            "changed",
                         )
                     })
 
@@ -601,6 +634,7 @@ def run_prices_etl(
         "valid": totals["valid"],
         "invalid": totals["invalid"],
         "resolved": totals["resolved"],
+        "changed": totals["changed"],
         "reasons": dict(reason_totals),
     }
 

@@ -1,7 +1,8 @@
+
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-echo "=== SLP PostgreSQL bootstrap ==="
+echo "=== Первоначальная настройка PostgreSQL для SLP ==="
 
 : "${POSTGRES_USER:?}"
 : "${POSTGRES_DB:?}"
@@ -11,7 +12,7 @@ echo "=== SLP PostgreSQL bootstrap ==="
 : "${AIRFLOW_DB_USER:?}"
 : "${AIRFLOW_DB_PASSWORD:?}"
 
-# Create application roles
+# Создание пользователей приложения и Airflow.
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname postgres \
@@ -23,7 +24,7 @@ CREATE ROLE :"slp_user" LOGIN PASSWORD :'slp_password';
 CREATE ROLE :"airflow_user" LOGIN PASSWORD :'airflow_password';
 SQL
 
-# Create Airflow database
+# Создание отдельной базы данных для Airflow.
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname postgres \
@@ -36,8 +37,7 @@ SELECT format(
 ) \gexec
 SQL
 
-
-# Grant full application access to deals_bigdata
+# Назначение владельца и выдача прав пользователю приложения.
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
@@ -58,4 +58,4 @@ GRANT ALL PRIVILEGES ON SEQUENCES TO :"slp_user";
 
 SQL
 
-echo "=== PostgreSQL bootstrap complete ==="
+echo "=== Первоначальная настройка PostgreSQL завершена ==="
