@@ -1,9 +1,7 @@
-"""Синхронизация связей цен из внешнего источника в Core.
+"""Синхронизация связей цен из независимого источника в Core.
 
-Источник и Core считаются независимыми базами данных.
-Снимок источника передаётся пакетами через Python во временную таблицу Core.
-После полной загрузки изменения применяются одной транзакцией вместе
-с записью событий для последующего обновления Mart.
+Полный снимок источника передаётся пакетами через Python во временную таблицу.
+Изменённые наборы связей обновляются атомарно вместе с журналом для Mart.
 """
 
 import logging
@@ -16,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5_000
 
-# Допустимые таблицы и соответствующие колонки значений.
-# Имена подставляются в SQL только из этого фиксированного словаря.
+# Имена таблиц и колонок берутся только из фиксированного списка.
 RELATIONS = {
     "price_dates": "price_date",
     "price_body_types": "body_type_id",
@@ -25,14 +22,13 @@ RELATIONS = {
 
 
 def load_relation(table_name: str) -> dict:
-    """Синхронизировать полный снимок одной таблицы связей."""
+    """Синхронизировать полный снимок таблицы связей с Core."""
     if table_name not in RELATIONS:
         raise ValueError(f"Неизвестная таблица связей: {table_name}")
 
     value_column = RELATIONS[table_name]
     value_type = "DATE" if table_name == "price_dates" else "INTEGER"
 
-    # Имена таблиц и колонок берутся только из RELATIONS.
     extract_sql = f"""
         SELECT id, price_id, {value_column}
         FROM public.{table_name}
@@ -48,20 +44,18 @@ def load_relation(table_name: str) -> dict:
         "batches": 0,
     }
 
-    # Подключения независимы: SQL-запросы к источнику не используют Core.
     with (
         get_connection("SLP_RAW_DB_HOST") as raw_conn,
         get_connection("SLP_CORE_DB_HOST") as core_conn,
     ):
-        with raw_conn.cursor() as cur:
-            # Повторяемое чтение обеспечивает согласованность полного снимка.
-            cur.execute(
+        with raw_conn.cursor() as raw_cur:
+            # Все пакеты читаются из одного согласованного снимка Raw.
+            raw_cur.execute(
                 "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
             )
 
         with core_conn.cursor() as core_cur:
-            # Временная таблица существует только в текущей транзакции Core.
-            # До завершения загрузки исходная таблица Core не изменяется.
+            # До полной загрузки снимка постоянные таблицы не меняются.
             core_cur.execute(f"""
                 CREATE TEMP TABLE slp_relation_stage (
                     id BIGINT PRIMARY KEY,
@@ -75,20 +69,18 @@ def load_relation(table_name: str) -> dict:
                 VALUES (%s, %s, %s)
             """
 
-            # Серверный курсор не загружает весь снимок в память Python.
             with raw_conn.cursor(
                 name="relation_source_stream",
                 row_factory=dict_row,
-            ) as raw_cur:
-                raw_cur.execute(extract_sql)
+            ) as source_cur:
+                source_cur.execute(extract_sql)
 
-                while rows := raw_cur.fetchmany(BATCH_SIZE):
+                while rows := source_cur.fetchmany(BATCH_SIZE):
                     values = [
                         (row["id"], row["price_id"], row[value_column])
                         for row in rows
                     ]
                     core_cur.executemany(insert_stage_sql, values)
-
                     stats["extracted"] += len(values)
                     stats["batches"] += 1
                     logger.info(
@@ -99,9 +91,8 @@ def load_relation(table_name: str) -> dict:
                         stats["extracted"],
                     )
 
-            # Сравниваем по первичному ключу и содержимому строки.
-            # Для изменённого id сохраняем как старый, так и новый price_id:
-            # связь могла быть перенесена с одной цены на другую.
+            # Сравнение по id учитывает вставки, удаления и изменения.
+            # При переносе связи сохраняем оба price_id: старый и новый.
             core_cur.execute(f"""
                 CREATE TEMP TABLE slp_relation_diff
                 ON COMMIT DROP AS
@@ -131,37 +122,49 @@ def load_relation(table_name: str) -> dict:
                 core_cur.fetchone()
             )
 
-            # Фиксируем затронутые цены до изменения таблицы Core.
-            core_cur.execute(f"""
-                INSERT INTO meta_data.changed_prices (price_id, source_table)
-                SELECT DISTINCT price_id, %s
+            # Из различий собираем уникальные цены, требующие пересборки.
+            core_cur.execute("""
+                CREATE TEMP TABLE slp_changed_relation_prices
+                ON COMMIT DROP AS
+                SELECT DISTINCT price_id
                 FROM (
                     SELECT old_price_id AS price_id FROM slp_relation_diff
                     UNION
                     SELECT new_price_id AS price_id FROM slp_relation_diff
                 ) AS changed
                 WHERE price_id IS NOT NULL
-                RETURNING price_id
-            """, (table_name,))
-            stats["changed_prices"] = len(core_cur.fetchall())
-
-            # Удаляем старые версии изменённых и отсутствующие в снимке строки.
-            # Неизменившиеся строки не трогаем.
-            core_cur.execute(f"""
-                DELETE FROM core.{table_name} AS c
-                USING slp_relation_diff AS d
-                WHERE c.id = d.old_id
             """)
 
-            # Вставляем новые версии и новые строки из полного снимка.
+            core_cur.execute("""
+                SELECT COUNT(*) FROM slp_changed_relation_prices
+            """)
+            stats["changed_prices"] = core_cur.fetchone()[0]
+
+            # Регистрируем затронутые цены в той же транзакции.
+            core_cur.execute("""
+                INSERT INTO meta_data.changed_prices (price_id, source_table)
+                SELECT price_id, %s
+                FROM slp_changed_relation_prices
+            """, (table_name,))
+
+            # Удаляем все старые связи затронутых цен, включая неизменённые.
+            # Это исключает конфликты уникальности при перестановке значений.
+            core_cur.execute(f"""
+                DELETE FROM core.{table_name} AS c
+                USING slp_changed_relation_prices AS changed
+                WHERE c.price_id = changed.price_id
+            """)
+
+            # Восстанавливаем полный актуальный набор связей этих цен.
             core_cur.execute(f"""
                 INSERT INTO core.{table_name} (id, price_id, {value_column})
                 SELECT s.id, s.price_id, s.{value_column}
                 FROM slp_relation_stage AS s
-                JOIN slp_relation_diff AS d ON d.new_id = s.id
+                JOIN slp_changed_relation_prices AS changed
+                  ON changed.price_id = s.price_id
             """)
 
-        # Коммит включает изменения Core и события журнала одновременно.
+        # Состояние Core и журнал изменений фиксируются одновременно.
         core_conn.commit()
 
     logger.info("Синхронизация %s завершена: %s", table_name, stats)
