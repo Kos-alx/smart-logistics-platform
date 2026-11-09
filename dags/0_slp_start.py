@@ -1,15 +1,15 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from airflow.sdk import dag
 from airflow.providers.standard.operators.trigger_dagrun import (
     TriggerDagRunOperator,
 )
+from airflow.sdk import dag, task
 
 
 @dag(
     dag_id="0_slp_start",
     schedule=None,
-    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2026, 1, 1, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=True,
@@ -86,10 +86,27 @@ def slp_start():
         deferrable=False,
     )
 
+    @task(task_id="refresh_pg_route_card", retries=2)
+    def pg_route_card():
+        from slp.etl.route_card import refresh_pg_route_card
+
+        return refresh_pg_route_card()
+
+    @task(task_id="refresh_ch_route_card", retries=2)
+    def ch_route_card():
+        from slp.etl.route_card import refresh_ch_route_card
+
+        return refresh_ch_route_card()
+
+    pg_card = pg_route_card()
+    ch_card = ch_route_card()
+
     [cities, body_types, exchange_rates] >> backfill
     backfill >> [price_dates, price_body_types]
     [price_dates, price_body_types] >> prices_prepared
     prices_prepared >> clickhouse
+    prices_prepared >> pg_card
+    clickhouse >> ch_card
 
 
 slp_start()

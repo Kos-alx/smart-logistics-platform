@@ -39,6 +39,7 @@ x-airflow-common: &airflow-common
     - ./slp:/opt/airflow/slp:ro
     - ./sql/queries:/opt/airflow/sql/queries:ro
     - ./sql/clickhouse:/opt/airflow/sql/clickhouse:ro
+    - ./sql/mart:/opt/airflow/sql/mart:ro
 
   depends_on:
     postgres:
@@ -103,6 +104,7 @@ services:
       - clickhouse_logs:/var/log/clickhouse-server
       - ./docker/clickhouse/init:/docker-entrypoint-initdb.d:ro
       - ./sql/clickhouse:/opt/slp/sql/clickhouse:ro
+      - ./docker/clickhouse/users.d/refresh-on-demand.xml:/etc/clickhouse-server/users.d/refresh-on-demand.xml:ro
 
     healthcheck:
       test:

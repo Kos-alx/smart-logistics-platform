@@ -10,5 +10,6 @@ RUN pip install --no-cache-dir \
 COPY --chown=airflow:0 slp /opt/airflow/slp
 COPY --chown=airflow:0 sql/queries /opt/airflow/sql/queries
 COPY --chown=airflow:0 sql/clickhouse /opt/airflow/sql/clickhouse
+COPY --chown=airflow:0 sql/mart /opt/airflow/sql/mart
 
 ENV PYTHONPATH=/opt/airflow

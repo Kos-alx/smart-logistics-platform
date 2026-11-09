@@ -1,0 +1,8 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <!-- После перезапуска сервера представления ждут явного запуска из DAG. -->
+            <stop_refreshable_materialized_views_on_startup>1</stop_refreshable_materialized_views_on_startup>
+        </default>
+    </profiles>
+</clickhouse>
