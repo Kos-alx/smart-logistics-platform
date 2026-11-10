@@ -5,7 +5,13 @@
 
 ## Запуск
 
-Заполнить `.env` по `.env.example`, затем:
+Скопировать пример настроек в `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Заполнить пароли и `AIRFLOW_JWT_SECRET` в `.env`, затем запустить проект:
 
 ```bash
 docker compose up -d --build

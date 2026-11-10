@@ -1,5 +1,5 @@
 x-airflow-common: &airflow-common
-  build:
+  build: &airflow-build
     context: .
     dockerfile: docker/airflow/Dockerfile
 
@@ -35,8 +35,7 @@ x-airflow-common: &airflow-common
 
   volumes:
     - ./dags:/opt/airflow/dags
-    - ./logs:/opt/airflow/logs
-    - ./plugins:/opt/airflow/plugins
+    - airflow_logs:/opt/airflow/logs
     - ml_artifacts:/opt/airflow/artifacts
     - ./slp:/opt/airflow/slp:ro
     - ./sql/queries:/opt/airflow/sql/queries:ro
@@ -44,12 +43,22 @@ x-airflow-common: &airflow-common
     - ./sql/mart:/opt/airflow/sql/mart:ro
 
   depends_on:
+    airflow-permissions:
+      condition: service_completed_successfully
     postgres:
       condition: service_healthy
     clickhouse:
       condition: service_healthy
 
 services:
+  airflow-permissions:
+    build: *airflow-build
+    user: "0:0"
+    restart: "no"
+    entrypoint: ["/bin/bash", "/opt/airflow/prepare-logs.sh"]
+    volumes:
+      - airflow_logs:/opt/airflow/logs
+
   postgres:
     image: postgres:17.6
     restart: unless-stopped
@@ -155,6 +164,7 @@ services:
         condition: service_completed_successfully
 
 volumes:
+  airflow_logs:
   ml_artifacts:
   postgres_data:
   clickhouse_data:
