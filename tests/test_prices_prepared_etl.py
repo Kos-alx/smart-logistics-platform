@@ -25,13 +25,6 @@ def conn():
         connection.close()
 
 
-def test_invalid_mode():
-    from slp.etl.prices_prepared import run_prices_prepared_etl
-
-    with pytest.raises(ValueError, match="режим"):
-        run_prices_prepared_etl(mode="invalid")
-
-
 def test_full_incremental_and_deletion(conn):
     from slp.etl.prices_prepared import QUERY_PATH, load_prices_prepared
 

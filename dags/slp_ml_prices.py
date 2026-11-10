@@ -7,6 +7,9 @@ from airflow.sdk import dag, task
 
 @dag(
     dag_id="slp_ml_prices",
+    description=(
+        'Обучение CatBoost на данных Core, сохранение модели и запись прогнозов для test и будущих заявок в PostgreSQL.'
+    ),
     schedule=None,
     start_date=datetime(2026, 1, 1, tzinfo=UTC),
     catchup=False,

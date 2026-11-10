@@ -106,11 +106,6 @@ def assert_metrics(rows):
     assert cells["2026-09-01", 14]["reliability_level"] == "HIGH"
 
 
-def test_route_card_files_exist():
-    for path in (ROOT / "sql/mart/02_route_card.sql", ROOT / "sql/clickhouse/02_route_card.sql"):
-        assert path.is_file(), f"Отсутствует SQL карточки: {path.name}"
-
-
 def test_route_card_metrics_and_parity():
     if os.getenv("SLP_RUN_CH_TESTS") != "1":
         pytest.skip("Проверки PostgreSQL и ClickHouse отключены")

@@ -1,13 +1,17 @@
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from airflow.sdk import dag, task
 
 
 @dag(
-    dag_id="slp_load_exchange_rates",
-    schedule=None,
-    start_date=datetime(2026, 1, 1),
+    dag_id="load_exchange_rates",
+    description=(
+        'Загрузка справочника валютных курсов в Core для пересчёта цен в рубли. Ежедневно в 09:00 по Москве.'
+    ),
+    schedule="0 9 * * *",
+    start_date=datetime(2026, 1, 1, tzinfo=ZoneInfo("Europe/Moscow")),
     catchup=False,
     max_active_runs=1,
     tags=["slp", "etl", "reference"],

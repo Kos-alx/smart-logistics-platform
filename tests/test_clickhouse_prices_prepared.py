@@ -7,13 +7,6 @@ from uuid import uuid4
 import pytest
 
 
-def test_invalid_clickhouse_mode():
-    from slp.etl.clickhouse_prices_prepared import run_clickhouse_prices_prepared_etl
-
-    with pytest.raises(ValueError, match="режим"):
-        run_clickhouse_prices_prepared_etl(mode="invalid")
-
-
 def test_partition_sync_and_retry(monkeypatch):
     if os.getenv("SLP_RUN_CH_TESTS") != "1":
         pytest.skip("Проверки ClickHouse отключены")

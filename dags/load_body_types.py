@@ -1,13 +1,17 @@
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from airflow.sdk import dag, task
 
 
 @dag(
-    dag_id="slp_load_body_types",
-    schedule=None,
-    start_date=datetime(2026, 1, 1),
+    dag_id="load_body_types",
+    description=(
+        'Загрузка справочника типов кузовов и их соответствий стандартным группам в Core. Ежедневно в 09:00 по Москве.'
+    ),
+    schedule="0 9 * * *",
+    start_date=datetime(2026, 1, 1, tzinfo=ZoneInfo("Europe/Moscow")),
     catchup=False,
     max_active_runs=1,
     tags=["slp", "etl", "reference"],

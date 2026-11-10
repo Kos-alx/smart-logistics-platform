@@ -22,14 +22,3 @@ CREATE TABLE IF NOT EXISTS core.price_body_types (
     CONSTRAINT core_price_body_types_unique
         UNIQUE (price_id, body_type_id)
 );
-
-
--- Участники сделок
-CREATE TABLE IF NOT EXISTS core.price_participants (
-    id            BIGINT PRIMARY KEY,
-    price_id      BIGINT NOT NULL,
-    subscriber_id BIGINT NOT NULL,
-
-    CONSTRAINT core_price_participants_unique
-        UNIQUE (price_id, subscriber_id)
-);

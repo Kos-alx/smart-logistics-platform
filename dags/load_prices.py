@@ -1,13 +1,18 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from airflow.sdk import dag, task, get_current_context
+from airflow.sdk.definitions.timetables.interval import CronDataIntervalTimetable
 
 from slp.etl.prices import run_prices_etl
 
 @dag(
-    dag_id="slp_load_prices",
-    schedule="@daily",
-    start_date=datetime(2023, 9, 22, tzinfo=timezone.utc),
+    dag_id="load_prices",
+    description=(
+        'Пакетная загрузка цен в Core за окно изменений: проверки качества, карантин, пересчёт в RUB и обновление без дублей. Ежедневно в 09:15 по Москве.'
+    ),
+    schedule=CronDataIntervalTimetable("15 9 * * *", timezone="Europe/Moscow"),
+    start_date=datetime(2023, 9, 22, tzinfo=ZoneInfo("Europe/Moscow")),
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
