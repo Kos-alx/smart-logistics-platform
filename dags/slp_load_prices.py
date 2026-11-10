@@ -10,6 +10,7 @@ from slp.etl.prices import run_prices_etl
     start_date=datetime(2023, 9, 22, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
+    is_paused_upon_creation=False,
     tags=["slp", "etl", "prices"],
 )
 def load_prices():

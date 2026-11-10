@@ -86,6 +86,14 @@ def slp_start():
         deferrable=False,
     )
 
+    ml = TriggerDagRunOperator(
+        task_id="train_and_score_ml",
+        trigger_dag_id="slp_ml_prices",
+        wait_for_completion=True,
+        poke_interval=10,
+        deferrable=False,
+    )
+
     @task(task_id="refresh_pg_route_card", retries=2)
     def pg_route_card():
         from slp.etl.route_card import refresh_pg_route_card
@@ -104,6 +112,7 @@ def slp_start():
     [cities, body_types, exchange_rates] >> backfill
     backfill >> [price_dates, price_body_types]
     [price_dates, price_body_types] >> prices_prepared
+    [price_dates, price_body_types] >> ml
     prices_prepared >> clickhouse
     prices_prepared >> pg_card
     clickhouse >> ch_card

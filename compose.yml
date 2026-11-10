@@ -26,6 +26,7 @@ x-airflow-common: &airflow-common
     SLP_DB_NAME: ${POSTGRES_DB}
     SLP_DB_USER: ${SLP_DB_USER}
     SLP_DB_PASSWORD: ${SLP_DB_PASSWORD}
+    SLP_ML_ARTIFACT_DIR: /opt/airflow/artifacts/ml
     SLP_CH_HOST: clickhouse
     SLP_CH_PORT: "8123"
     CLICKHOUSE_DB: ${CLICKHOUSE_DB:-slp}
@@ -36,6 +37,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ml_artifacts:/opt/airflow/artifacts
     - ./slp:/opt/airflow/slp:ro
     - ./sql/queries:/opt/airflow/sql/queries:ro
     - ./sql/clickhouse:/opt/airflow/sql/clickhouse:ro
@@ -153,6 +155,7 @@ services:
         condition: service_completed_successfully
 
 volumes:
+  ml_artifacts:
   postgres_data:
   clickhouse_data:
   clickhouse_logs:

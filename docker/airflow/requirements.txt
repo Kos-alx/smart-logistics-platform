@@ -1,2 +1,7 @@
 psycopg[binary]>=3.2,<4
 clickhouse-connect>=0.8,<1
+# Версии ML совпадают с проверенным экспериментом в notebook.
+catboost==1.2.10
+numpy==2.5.4
+pandas==2.3.3
+scikit-learn==1.9.1
